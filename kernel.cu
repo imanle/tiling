@@ -15,15 +15,11 @@ __global__ void mm_tiled_kernel(float* A, float* B, float* C, unsigned int M, un
         if(row<K && TILE_DIM+ tile*threadIdx.x <K ){
         A_s[threadIdx.y][threadIdx.x] = A[row*K + tile*TILE_DIM + threadIdx.x];
     }
-    else{
-      A_s[threadIdx.y][threadIdx.x] =0;  
-    }
+    
         if(tile*TILE_DIM+threadIdx.y < K && col< K){
         B_s[threadIdx.y][threadIdx.x] = B[(tile*TILE_DIM + threadIdx.y)*N + col];
         }
-        else{
-      B_s[threadIdx.y][threadIdx.x] =0;  
-    }
+        
 __syncthreads();
     if(row< M && col<N){
         for(unsigned int i = 0; i < TILE_DIM; ++i) {

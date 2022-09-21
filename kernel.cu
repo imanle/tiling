@@ -12,13 +12,13 @@ __global__ void mm_tiled_kernel(float* A, float* B, float* C, unsigned int M, un
     float sum = 0.0f;
     for(unsigned int tile = 0; tile < (K + TILE_DIM -1 ) / TILE_DIM; ++tile) {
 
-        if( row < M && tile*TILE_DIM+threadIdx.x < K){
+        if( row < M && (tile*TILE_DIM+threadIdx.x )< K){
         A_s[threadIdx.y][threadIdx.x] = A[row*K + tile*TILE_DIM + threadIdx.x];
         }
         else{
         A_s[threadIdx.y][threadIdx.x] = 0.0;
         }
-        if( TILE_DIM*tile+threadIdx.y < K && col < N){
+        if( (TILE_DIM*tile+threadIdx.y) < K && col < N){
         
         B_s[threadIdx.y][threadIdx.x] = B[(tile*TILE_DIM + threadIdx.y)*N + col];
         }

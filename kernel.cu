@@ -28,8 +28,9 @@ __global__ void mm_tiled_kernel(float* A, float* B, float* C, unsigned int M, un
         
 __syncthreads();
         for(unsigned int i = 0; i < TILE_DIM; ++i) {
-            
+            if (i*tile*TILE_DIM<k){
                 sum += A_s[threadIdx.y][i]*B_s[i][threadIdx.x];
+            }
             
             }
         }

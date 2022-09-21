@@ -20,7 +20,7 @@ __global__ void mm_tiled_kernel(float* A, float* B, float* C, unsigned int M, un
         }
         if( TILE_DIM*tile+threadIdx.y < K && col < N){
         
-        B_s[threadIdx.y][threadIdx.x] = B[(tile*TILE_DIM + threadIdx.y)*N + col];
+        B_s[threadIdx.y][threadIdx.x] = B[(tile*TILE_DIM + threadIdx.y)*K + col];
         }
         else{
         B_s[threadIdx.y][threadIdx.x] = 0;

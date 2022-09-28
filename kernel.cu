@@ -1,130 +1,57 @@
-
 #include "common.h"
 #include "timer.h"
 
-#define TILE_DIM 32
+#define IN_TILE_DIM 32
+#define OUT_TILE_DIM ((IN_TILE_DIM) - 2*(FILTER_RADIUS))
 
-__global__ void mm_tiled_kernel(float* A, float* B, float* C, unsigned int M, unsigned int N, unsigned int K) {
-    __shared__ float A_s[TILE_DIM][TILE_DIM];
-    __shared__ float B_s[TILE_DIM][TILE_DIM];
-    unsigned int row = blockIdx.y*blockDim.y + threadIdx.y;
-    unsigned int col = blockIdx.x*blockDim.x + threadIdx.x;
-    float sum = 0.0f;
-    for(unsigned int tile = 0; tile < (K + TILE_DIM -1 ) / TILE_DIM; ++tile) {
+__constant__ float filter_c[FILTER_DIM][FILTER_DIM];
 
-        if( row < M && (tile*TILE_DIM+threadIdx.x )< K){
-        A_s[threadIdx.y][threadIdx.x] = A[row*K + tile*TILE_DIM + threadIdx.x];
-        }
-        else{
-        A_s[threadIdx.y][threadIdx.x] = 0.0;
-        }
-        if( (TILE_DIM*tile+threadIdx.y) < K && col < N){
-        
-        B_s[threadIdx.y][threadIdx.x] = B[(tile*TILE_DIM + threadIdx.y)*N + col];
-        }
-        else{
-        B_s[threadIdx.y][threadIdx.x] = 0.0;
-        }
-        
-__syncthreads();
-        for(unsigned int i = 0; i < TILE_DIM; ++i) {
-            
-                sum += A_s[threadIdx.y][i]*B_s[i][threadIdx.x];
-            
-            
-            }
-        }
-            __syncthreads();
-    if(row< M && col<N){
-        C[row*N + col] = sum;   
-} 
+__global__ void convolution_tiled_kernel(float* input, float* output, unsigned int width, unsigned int height) {
 
+     __shared__ float cov[IN_TILE_DIM][IN_TILE_DIM];
+      int out_row = threadIdx.y + blockIdx.y * OUT_TILE_DIM;
+      int out_col = threadIdx.x + blockIdx.x * OUT_TILE_DIM;
+      int in_row = out_row - FILTER_DIM;
+      int in_col = out_col - FILTER_DIM;
+     
+     float sum = 0.0f;
+        if((in_row >= 0) && (in_row< height) && (in_col >= 0) && (in_col < width) ) {
+        cov[threadIdx.y][threadIdx.x]= cov[in_row*width + in_col];
+        }
+    
+    else{
+     cov[threadIdx.y][threadIdx.x]=0;
+     }
+   __syncthreads();
+     if(threadIdx.y < OUT_TILE_DIM && threadIdx.x < OUT_TILE_DIM){
+        for(i = 0; i < FILTER_DIM; i++) {
+            for(j = 0; j < FILTER_DIM; j++) { 
+                sum += filter_c_[i][j] * cov[i+threadIdx.y][j+threadIdx.x];
+} }
+           __syncthreads();
+          if(out_row < height && out_col < width){
+    output[out_row*width + out_col] = sum;
+          }
+     }
 
 }
 
-void mm_gpu(float* A, float* B, float* C, unsigned int M, unsigned int N, unsigned int K) {
+void copyFilterToGPU(float filter[][FILTER_DIM]) {
 
-    Timer timer;
+    // Copy filter to constant memory
 
-    // Allocate GPU memory
-    startTime(&timer);
+    cudaMemcpyToSymbol(filter_c, filter, FILTER_DIM*FILTER_DIM*sizeof(float));
 
-    float *A_d, *B_d, *C_d; 
- cudaMalloc((void**) &A_d, M*K*sizeof(float));
- cudaMalloc((void**) &B_d, K*N*sizeof(float)); 
- cudaMalloc((void**) &C_d, M*N*sizeof(float));
+}
 
-
-
-
-
-    cudaDeviceSynchronize();
-    stopTime(&timer);
-    printElapsedTime(timer, "Allocation time");
-
-    // Copy data to GPU
-    startTime(&timer);
-
-    cudaMemcpy(A_d, A, M*K*sizeof(float), cudaMemcpyHostToDevice); 
-    cudaMemcpy(B_d, B, K*N*sizeof(float), cudaMemcpyHostToDevice);
-
-
-
-
-
-
-
-    cudaDeviceSynchronize();
-    stopTime(&timer);
-    printElapsedTime(timer, "Copy to GPU time");
+void convolution_tiled_gpu(float* input_d, float* output_d, unsigned int width, unsigned int height) {
 
     // Call kernel
-    startTime(&timer);
 
-   dim3 numThreadsPerBlock(32, 32);
-    dim3 numBlocks((N + numThreadsPerBlock.x - 1)/numThreadsPerBlock.x ,
-                   (M + numThreadsPerBlock.y - 1)/numThreadsPerBlock.y); 
-    mm_tiled_kernel <<< numBlocks, numThreadsPerBlock >>> (A_d, B_d, C_d, M, N, K);
+    dim3 numThreadsPerBlock(OUT_TILE_DIM, OUT_TILE_DIM);
+    dim3 numBlocks((width + OUT_TILE_DIM - 1)/OUT_TILE_DIM, (height + OUT_TILE_DIM - 1)/OUT_TILE_DIM);
+    convolution_tiled_kernel <<< numBlocks, numThreadsPerBlock >>> (input_d, output_d, width, height);
 
 
-
-
-
-
-
-    cudaDeviceSynchronize();
-    stopTime(&timer);
-    printElapsedTime(timer, "Kernel time", GREEN);
-
-    // Copy data from GPU
-    startTime(&timer);
-
-    cudaMemcpy(C, C_d, M*N*sizeof(float), cudaMemcpyDeviceToHost);
-
-
-
-
-
-
-    cudaDeviceSynchronize();
-    stopTime(&timer);
-    printElapsedTime(timer, "Copy from GPU time");
-
-    // Free GPU memory
-    startTime(&timer);
-
-    cudaFree(A_d); 
-    cudaFree(B_d); 
-    cudaFree(C_d);
-
-
-
-
-
-
-    cudaDeviceSynchronize();
-    stopTime(&timer);
-    printElapsedTime(timer, "Deallocation time");
 
 }
-

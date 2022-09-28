@@ -15,6 +15,7 @@ __global__ void convolution_tiled_kernel(float* input, float* output, unsigned i
       int in_col = out_col - FILTER_DIM;
      
      float sum = 0.0f;
+     //TODO
         if((in_row >= 0) && (in_row< height) && (in_col >= 0) && (in_col < width) ) {
         cov[threadIdx.y][threadIdx.x]= cov[in_row*width + in_col];
         }
